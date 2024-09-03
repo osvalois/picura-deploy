@@ -25,6 +25,24 @@ jobs:
         chmod 600 kubeconfig.yaml
         export KUBECONFIG=$(pwd)/kubeconfig.yaml
         kubectl config view --raw
+        kubectl config current-context
+        kubectl cluster-info
+
+    - name: Debug - Print kubeconfig content
+      run: |
+        echo "First 10 lines of kubeconfig:"
+        head -n 10 kubeconfig.yaml
+        echo "Last 10 lines of kubeconfig:"
+        tail -n 10 kubeconfig.yaml
+
+    - name: Debug - Check kubectl version
+      run: kubectl version --client
+
+    - name: Debug - Check environment
+      run: |
+        echo "KUBECONFIG: $KUBECONFIG"
+        echo "PWD: $(pwd)"
+        ls -la
 
     - name: Set up Helm
       uses: azure/setup-helm@v3
@@ -67,28 +85,46 @@ jobs:
       run: make expose-services
       continue-on-error: true
 
-    - name: Get service URLs
-      run: make get-service-urls
-      id: get-urls
-
-    - name: Debug - Print GitHub context
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-      run: echo "$GITHUB_CONTEXT"
-
-    - name: Debug - Check GitHub Token permissions
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Get and display public service URLs
+      id: get_urls
       run: |
-        echo "Token permissions:"
-        curl -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/rate_limit
+        echo "Waiting for Load Balancers to be assigned public IPs..."
+        sleep 60  # Esperar un minuto para que se asignen las IPs
+
+        PROMETHEUS_IP=$(kubectl get svc prometheus-kube-prometheus-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        GRAFANA_IP=$(kubectl get svc prometheus-grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        ELASTICSEARCH_IP=$(kubectl get svc elasticsearch-master -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        KIBANA_IP=$(kubectl get svc kibana-kibana -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        METRICS_SERVER_IP=$(kubectl get svc metrics-server -n kube-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+        echo "Public URLs:"
+        echo "Prometheus: http://$PROMETHEUS_IP:9090"
+        echo "Grafana: http://$GRAFANA_IP:80"
+        echo "Elasticsearch: http://$ELASTICSEARCH_IP:9200"
+        echo "Kibana: http://$KIBANA_IP:5601"
+        echo "Metrics Server API: https://$METRICS_SERVER_IP:443/apis/metrics.k8s.io/v1beta1/"
+
+        echo "prometheus_url=http://$PROMETHEUS_IP:9090" >> $GITHUB_OUTPUT
+        echo "grafana_url=http://$GRAFANA_IP:80" >> $GITHUB_OUTPUT
+        echo "elasticsearch_url=http://$ELASTICSEARCH_IP:9200" >> $GITHUB_OUTPUT
+        echo "kibana_url=http://$KIBANA_IP:5601" >> $GITHUB_OUTPUT
+        echo "metrics_server_url=https://$METRICS_SERVER_IP:443/apis/metrics.k8s.io/v1beta1/" >> $GITHUB_OUTPUT
 
     - name: Create Release Notes
       run: |
         cat << EOF > release_notes.md
         # Service URLs
 
-        ${{ steps.get-urls.outputs.stdout }}
+        ## Monitoring
+        - Prometheus: ${{ steps.get_urls.outputs.prometheus_url }}
+        - Grafana: ${{ steps.get_urls.outputs.grafana_url }}
+
+        ## Logging
+        - Elasticsearch: ${{ steps.get_urls.outputs.elasticsearch_url }}
+        - Kibana: ${{ steps.get_urls.outputs.kibana_url }}
+
+        ## Resource Management
+        - Metrics Server API: ${{ steps.get_urls.outputs.metrics_server_url }}
 
         Please note that you may need to use appropriate authentication to access these services.
         EOF
@@ -107,10 +143,8 @@ jobs:
 
     - name: Show resource usage
       run: |
-        kubectl config view
-        kubectl cluster-info
-        kubectl get nodes
         kubectl top nodes
+        kubectl top pods --all-namespaces
 
     - name: Clean up kubeconfig
       run: rm kubeconfig.yaml
