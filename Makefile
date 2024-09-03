@@ -30,7 +30,8 @@ install-monitoring:
 	$(HELM) repo add grafana https://grafana.github.io/helm-charts
 	$(HELM) repo update
 	$(HELM) upgrade --install prometheus $(PROMETHEUS_CHART) -n $(MONITORING_NS)
-	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS)
+	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS) --set adminUser=nuevo_usuario --set adminPassword=nueva_contraseña
+
 
 # Logging
 install-logging:
