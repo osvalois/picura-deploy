@@ -28,12 +28,26 @@ jobs:
         kubectl config current-context
         kubectl cluster-info
 
-    - name: Debug - Print kubeconfig content
+    - name: Debug - Print kubeconfig
       run: |
-        echo "First 10 lines of kubeconfig:"
-        head -n 10 kubeconfig.yaml
-        echo "Last 10 lines of kubeconfig:"
-        tail -n 10 kubeconfig.yaml
+        echo "Content of kubeconfig:"
+        cat kubeconfig.yaml
+
+    - name: Debug - Check kubectl config
+      run: |
+        echo "Current context:"
+        kubectl config current-context
+        echo "Available contexts:"
+        kubectl config get-contexts
+        echo "Clusters:"
+        kubectl config get-clusters
+
+    - name: Debug - Test connection
+      run: |
+        echo "Attempting to list nodes:"
+        kubectl get nodes
+        echo "Attempting to get cluster info:"
+        kubectl cluster-info
 
     - name: Debug - Check kubectl version
       run: kubectl version --client
@@ -149,3 +163,5 @@ jobs:
     - name: Clean up kubeconfig
       run: rm kubeconfig.yaml
       if: always()
+      
+      
