@@ -73,17 +73,19 @@ jobs:
       run: make get-service-urls
       id: get-urls
 
-    - name: Install GitHub CLI
+    - name: Debug - Print GitHub context
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: echo "$GITHUB_CONTEXT"
+
+    - name: Debug - Check GitHub Token permissions
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-        sudo apt update
-        sudo apt install gh
+        echo "Token permissions:"
+        curl -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/rate_limit
 
-    - name: Authenticate with GitHub CLI
-      run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-    - name: Create GitHub Release
+    - name: Create Release Notes
       run: |
         cat << EOF > release_notes.md
         # Service URLs
@@ -92,9 +94,18 @@ jobs:
 
         Please note that you may need to use appropriate authentication to access these services.
         EOF
-        gh release create v$(date +%Y.%m.%d) -F release_notes.md -t "Service URLs $(date +%Y-%m-%d)"
+        cat release_notes.md
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: Service URLs ${{ github.run_number }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
 
     - name: Show resource usage
       run: make show-resource-usage
