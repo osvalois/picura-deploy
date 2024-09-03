@@ -1,0 +1,104 @@
+name: Kubernetes Resource Management
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Ejecutar cada domingo a medianoche
+  workflow_dispatch:  # Permite la ejecución manual
+
+env:
+  KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+
+jobs:
+  manage-kubernetes-resources:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v1
+
+    - name: Configure kubectl
+      run: |
+        echo "$KUBE_CONFIG" | base64 -d > kubeconfig.yaml
+        chmod 600 kubeconfig.yaml
+        export KUBECONFIG=kubeconfig.yaml
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'latest'
+
+    - name: Install or update Monitoring resources
+      run: make install-monitoring
+      continue-on-error: true
+
+    - name: Install or update Logging resources
+      run: make install-logging
+      continue-on-error: true
+
+    - name: Install or update Resource Management
+      run: make install-resource-management
+      continue-on-error: true
+
+    - name: Apply Resource Quotas
+      run: make apply-resource-quotas
+      continue-on-error: true
+
+    - name: Apply Limit Ranges
+      run: make apply-limit-ranges
+      continue-on-error: true
+
+    - name: Install or update HPA
+      run: make install-hpa
+      continue-on-error: true
+
+    - name: Install or update VPA
+      run: make install-vpa
+      continue-on-error: true
+
+    - name: Update all Helm charts
+      run: make update-charts
+      continue-on-error: true
+
+    - name: Expose services
+      run: make expose-services
+      continue-on-error: true
+
+    - name: Get service URLs
+      run: make get-service-urls
+      id: get-urls
+
+    - name: Install GitHub CLI
+      run: |
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh
+
+    - name: Authenticate with GitHub CLI
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+    - name: Create GitHub Release
+      run: |
+        cat << EOF > release_notes.md
+        # Service URLs
+
+        ${{ steps.get-urls.outputs.stdout }}
+
+        Please note that you may need to use appropriate authentication to access these services.
+        EOF
+        gh release create v$(date +%Y.%m.%d) -F release_notes.md -t "Service URLs $(date +%Y-%m-%d)"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Show resource usage
+      run: make show-resource-usage
+
+    - name: Clean up kubeconfig
+      run: rm kubeconfig.yaml
+      if: always()
