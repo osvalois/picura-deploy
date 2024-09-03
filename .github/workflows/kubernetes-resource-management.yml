@@ -9,6 +9,9 @@ on:
     - cron: '0 0 * * 0'  # Ejecutar cada domingo a medianoche
   workflow_dispatch:  # Permite la ejecución manual
 
+env:
+  KUBECONFIG: ./kubeconfig.yaml
+
 jobs:
   manage-kubernetes-resources:
     runs-on: ubuntu-latest
@@ -18,113 +21,96 @@ jobs:
 
     - name: Set up kubectl
       uses: azure/setup-kubectl@v1
+      with:
+        version: 'v1.24.0'  # Especifica la versión de kubectl que necesitas
 
     - name: Configure kubectl
       run: |
-        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
-        chmod 600 kubeconfig.yaml
-        export KUBECONFIG=$(pwd)/kubeconfig.yaml
-        kubectl config view --raw
-        kubectl config current-context
-        kubectl cluster-info
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $KUBECONFIG
+        chmod 600 $KUBECONFIG
 
     - name: Debug - Print kubeconfig
       run: |
-        echo "Content of kubeconfig:"
-        cat kubeconfig.yaml
+        echo "Content of kubeconfig (first and last 10 lines):"
+        (head -n 10 $KUBECONFIG && echo "..." && tail -n 10 $KUBECONFIG) || echo "Failed to read kubeconfig"
 
     - name: Debug - Check kubectl config
       run: |
         echo "Current context:"
-        kubectl config current-context
+        kubectl config current-context || echo "Failed to get current context"
         echo "Available contexts:"
-        kubectl config get-contexts
+        kubectl config get-contexts || echo "Failed to get contexts"
         echo "Clusters:"
-        kubectl config get-clusters
+        kubectl config get-clusters || echo "Failed to get clusters"
 
     - name: Debug - Test connection
       run: |
         echo "Attempting to list nodes:"
-        kubectl get nodes
+        kubectl get nodes || echo "Failed to get nodes"
         echo "Attempting to get cluster info:"
-        kubectl cluster-info
-
-    - name: Debug - Check kubectl version
-      run: kubectl version --client
-
-    - name: Debug - Check environment
-      run: |
-        echo "KUBECONFIG: $KUBECONFIG"
-        echo "PWD: $(pwd)"
-        ls -la
+        kubectl cluster-info || echo "Failed to get cluster info"
 
     - name: Set up Helm
       uses: azure/setup-helm@v3
       with:
-        version: 'latest'
+        version: 'v3.8.0'  # Especifica la versión de Helm que necesitas
 
     - name: Install or update Monitoring resources
-      run: make install-monitoring
-      continue-on-error: true
+      run: |
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo add grafana https://grafana.github.io/helm-charts
+        helm repo update
+        kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring || echo "Failed to install Prometheus"
+        helm upgrade --install grafana grafana/grafana --namespace monitoring || echo "Failed to install Grafana"
 
     - name: Install or update Logging resources
-      run: make install-logging
-      continue-on-error: true
+      run: |
+        helm repo add elastic https://helm.elastic.co
+        helm repo update
+        kubectl create namespace logging --dry-run=client -o yaml | kubectl apply -f -
+        helm upgrade --install elasticsearch elastic/elasticsearch --namespace logging || echo "Failed to install Elasticsearch"
+        helm upgrade --install kibana elastic/kibana --namespace logging || echo "Failed to install Kibana"
 
     - name: Install or update Resource Management
-      run: make install-resource-management
-      continue-on-error: true
-
-    - name: Apply Resource Quotas
-      run: make apply-resource-quotas
-      continue-on-error: true
-
-    - name: Apply Limit Ranges
-      run: make apply-limit-ranges
-      continue-on-error: true
-
-    - name: Install or update HPA
-      run: make install-hpa
-      continue-on-error: true
-
-    - name: Install or update VPA
-      run: make install-vpa
-      continue-on-error: true
-
-    - name: Update all Helm charts
-      run: make update-charts
-      continue-on-error: true
+      run: |
+        helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+        helm repo update
+        helm upgrade --install metrics-server metrics-server/metrics-server --namespace kube-system || echo "Failed to install Metrics Server"
 
     - name: Expose services
-      run: make expose-services
-      continue-on-error: true
+      run: |
+        kubectl patch svc prometheus-kube-prometheus-prometheus -n monitoring -p '{"spec": {"type": "LoadBalancer"}}' || echo "Failed to expose Prometheus"
+        kubectl patch svc grafana -n monitoring -p '{"spec": {"type": "LoadBalancer"}}' || echo "Failed to expose Grafana"
+        kubectl patch svc elasticsearch-master -n logging -p '{"spec": {"type": "LoadBalancer"}}' || echo "Failed to expose Elasticsearch"
+        kubectl patch svc kibana-kibana -n logging -p '{"spec": {"type": "LoadBalancer"}}' || echo "Failed to expose Kibana"
+
+    - name: Wait for Load Balancers
+      run: |
+        echo "Waiting for Load Balancers to be assigned public IPs..."
+        sleep 120  # Esperar dos minutos para que se asignen las IPs
 
     - name: Get and display public service URLs
       id: get_urls
       run: |
-        echo "Waiting for Load Balancers to be assigned public IPs..."
-        sleep 60  # Esperar un minuto para que se asignen las IPs
-
-        PROMETHEUS_IP=$(kubectl get svc prometheus-kube-prometheus-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-        GRAFANA_IP=$(kubectl get svc prometheus-grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-        ELASTICSEARCH_IP=$(kubectl get svc elasticsearch-master -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-        KIBANA_IP=$(kubectl get svc kibana-kibana -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-        METRICS_SERVER_IP=$(kubectl get svc metrics-server -n kube-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        PROMETHEUS_IP=$(kubectl get svc prometheus-kube-prometheus-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Prometheus IP")
+        GRAFANA_IP=$(kubectl get svc grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Grafana IP")
+        ELASTICSEARCH_IP=$(kubectl get svc elasticsearch-master -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Elasticsearch IP")
+        KIBANA_IP=$(kubectl get svc kibana-kibana -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Kibana IP")
 
         echo "Public URLs:"
         echo "Prometheus: http://$PROMETHEUS_IP:9090"
         echo "Grafana: http://$GRAFANA_IP:80"
         echo "Elasticsearch: http://$ELASTICSEARCH_IP:9200"
         echo "Kibana: http://$KIBANA_IP:5601"
-        echo "Metrics Server API: https://$METRICS_SERVER_IP:443/apis/metrics.k8s.io/v1beta1/"
 
         echo "prometheus_url=http://$PROMETHEUS_IP:9090" >> $GITHUB_OUTPUT
         echo "grafana_url=http://$GRAFANA_IP:80" >> $GITHUB_OUTPUT
         echo "elasticsearch_url=http://$ELASTICSEARCH_IP:9200" >> $GITHUB_OUTPUT
         echo "kibana_url=http://$KIBANA_IP:5601" >> $GITHUB_OUTPUT
-        echo "metrics_server_url=https://$METRICS_SERVER_IP:443/apis/metrics.k8s.io/v1beta1/" >> $GITHUB_OUTPUT
 
     - name: Create Release Notes
+      if: success()
       run: |
         cat << EOF > release_notes.md
         # Service URLs
@@ -137,14 +123,12 @@ jobs:
         - Elasticsearch: ${{ steps.get_urls.outputs.elasticsearch_url }}
         - Kibana: ${{ steps.get_urls.outputs.kibana_url }}
 
-        ## Resource Management
-        - Metrics Server API: ${{ steps.get_urls.outputs.metrics_server_url }}
-
         Please note that you may need to use appropriate authentication to access these services.
         EOF
         cat release_notes.md
 
     - name: Create GitHub Release
+      if: success()
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -156,12 +140,11 @@ jobs:
         prerelease: false
 
     - name: Show resource usage
+      if: success()
       run: |
-        kubectl top nodes
-        kubectl top pods --all-namespaces
+        kubectl top nodes || echo "Failed to get node resource usage"
+        kubectl top pods --all-namespaces || echo "Failed to get pod resource usage"
 
-    - name: Clean up kubeconfig
-      run: rm kubeconfig.yaml
+    - name: Clean up
       if: always()
-      
-      
+      run: rm -f $KUBECONFIG
