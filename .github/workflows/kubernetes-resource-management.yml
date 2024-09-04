@@ -63,10 +63,10 @@ jobs:
         helm repo add grafana https://grafana.github.io/helm-charts
         helm repo update
         kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring || echo "Failed to install Prometheus"
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring --debug || echo "Failed to install Prometheus"
         helm upgrade --install grafana grafana/grafana --namespace monitoring \
           --set adminUser="${GRAFANA_ADMIN_USER}" \
-          --set adminPassword="${GRAFANA_ADMIN_PASSWORD}" || echo "Failed to install Grafana"
+          --set adminPassword="${GRAFANA_ADMIN_PASSWORD}" --debug || echo "Failed to install Grafana"
         
         echo "Verifying Prometheus installation:"
         kubectl get pods -n monitoring -l app=prometheus
@@ -78,8 +78,8 @@ jobs:
         helm repo add elastic https://helm.elastic.co
         helm repo update
         kubectl create namespace logging --dry-run=client -o yaml | kubectl apply -f -
-        helm upgrade --install elasticsearch elastic/elasticsearch --namespace logging || echo "Failed to install Elasticsearch"
-        helm upgrade --install kibana elastic/kibana --namespace logging || echo "Failed to install Kibana"
+        helm upgrade --install elasticsearch elastic/elasticsearch --namespace logging --debug || echo "Failed to install Elasticsearch"
+        helm upgrade --install kibana elastic/kibana --namespace logging --debug || echo "Failed to install Kibana"
         
         echo "Verifying Elasticsearch installation:"
         kubectl get pods -n logging -l app=elasticsearch-master
@@ -90,7 +90,7 @@ jobs:
       run: |
         helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
         helm repo update
-        helm upgrade --install metrics-server metrics-server/metrics-server --namespace kube-system || echo "Failed to install Metrics Server"
+        helm upgrade --install metrics-server metrics-server/metrics-server --namespace kube-system --debug || echo "Failed to install Metrics Server"
         
         echo "Verifying Metrics Server installation:"
         kubectl get pods -n kube-system -l k8s-app=metrics-server
@@ -111,12 +111,16 @@ jobs:
         echo "Elasticsearch service status:"
         kubectl get svc elasticsearch-master -n logging -o wide
         echo "Kibana service status:"
-        kubectl get svc kibana-kibana -n logging -o wide
+        kubectl get svc -n logging | grep kibana || echo "No Kibana service found"
+        
+        echo "Debugging Kibana deployment:"
+        kubectl get pods -n logging -l app=kibana
+        kubectl describe deployment -n logging kibana || echo "Kibana deployment not found"
 
     - name: Wait for Load Balancers
       run: |
         echo "Waiting for Load Balancers to be assigned public IPs..."
-        sleep 180  # Wait for 3 minutes
+        sleep 300  # Wait for 5 minutes
 
     - name: Get and display public service URLs
       id: get_urls
@@ -143,7 +147,17 @@ jobs:
           local service=$2
           local ip=$(kubectl get svc $service -n $namespace -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
           if [ -z "$ip" ]; then
-            echo "pending"
+            local nodePort=$(kubectl get svc $service -n $namespace -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)
+            if [ -n "$nodePort" ]; then
+              local nodeIP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}' 2>/dev/null)
+              if [ -n "$nodeIP" ]; then
+                echo "${nodeIP}:${nodePort}"
+              else
+                echo "pending"
+              fi
+            else
+              echo "pending"
+            fi
           else
             echo "$ip"
           fi
@@ -154,16 +168,16 @@ jobs:
         ELASTICSEARCH_IP=$(get_service_ip logging elasticsearch-master)
         KIBANA_IP=$(get_service_ip logging kibana-kibana)
 
-        echo "Public URLs (IPs may be pending):"
-        echo "Prometheus: http://${PROMETHEUS_IP}:9090"
-        echo "Grafana: http://${GRAFANA_IP}:80"
-        echo "Elasticsearch: http://${ELASTICSEARCH_IP}:9200"
-        echo "Kibana: http://${KIBANA_IP}:5601"
+        echo "Public URLs (IPs may be pending or using NodePort):"
+        echo "Prometheus: http://${PROMETHEUS_IP}"
+        echo "Grafana: http://${GRAFANA_IP}"
+        echo "Elasticsearch: http://${ELASTICSEARCH_IP}"
+        echo "Kibana: http://${KIBANA_IP}"
 
-        echo "prometheus_url=http://${PROMETHEUS_IP}:9090" >> $GITHUB_OUTPUT
-        echo "grafana_url=http://${GRAFANA_IP}:80" >> $GITHUB_OUTPUT
-        echo "elasticsearch_url=http://${ELASTICSEARCH_IP}:9200" >> $GITHUB_OUTPUT
-        echo "kibana_url=http://${KIBANA_IP}:5601" >> $GITHUB_OUTPUT
+        echo "prometheus_url=http://${PROMETHEUS_IP}" >> $GITHUB_OUTPUT
+        echo "grafana_url=http://${GRAFANA_IP}" >> $GITHUB_OUTPUT
+        echo "elasticsearch_url=http://${ELASTICSEARCH_IP}" >> $GITHUB_OUTPUT
+        echo "kibana_url=http://${KIBANA_IP}" >> $GITHUB_OUTPUT
 
     - name: Debug - Check namespace events
       run: |
