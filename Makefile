@@ -19,6 +19,10 @@ ELK_CHART = elastic/elasticsearch
 # Resource management tools
 METRICS_SERVER_CHART = metrics-server/metrics-server
 
+# Grafana credentials
+GRAFANA_ADMIN_USER ?= $(shell echo $${GRAFANA_ADMIN_USER:-picura})
+GRAFANA_ADMIN_PASSWORD ?= $(shell echo $${GRAFANA_ADMIN_PASSWORD:-picuraadm#4?!8})
+
 .PHONY: all install-monitoring install-logging install-resource-management apply-resource-quotas apply-limit-ranges install-hpa install-vpa expose-services get-service-urls clean show-resource-usage update-charts help
 
 all: install-monitoring install-logging install-resource-management apply-resource-quotas apply-limit-ranges install-hpa install-vpa
@@ -30,8 +34,9 @@ install-monitoring:
 	$(HELM) repo add grafana https://grafana.github.io/helm-charts
 	$(HELM) repo update
 	$(HELM) upgrade --install prometheus $(PROMETHEUS_CHART) -n $(MONITORING_NS)
-	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS) --set adminUser=nuevo_usuario --set adminPassword=nueva_contraseña
-
+	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS) \
+		--set adminUser="$(GRAFANA_ADMIN_USER)" \
+		--set adminPassword="$(GRAFANA_ADMIN_PASSWORD)"
 
 # Logging
 install-logging:
@@ -100,7 +105,9 @@ show-resource-usage:
 update-charts:
 	$(HELM) repo update
 	$(HELM) upgrade --install prometheus $(PROMETHEUS_CHART) -n $(MONITORING_NS)
-	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS)
+	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS) \
+		--set adminUser="$(GRAFANA_ADMIN_USER)" \
+		--set adminPassword="$(GRAFANA_ADMIN_PASSWORD)"
 	$(HELM) upgrade --install elasticsearch $(ELK_CHART) -n $(LOGGING_NS)
 	$(HELM) upgrade --install kibana elastic/kibana -n $(LOGGING_NS)
 	$(HELM) upgrade --install metrics-server $(METRICS_SERVER_CHART) --namespace kube-system
@@ -123,3 +130,7 @@ help:
 	@echo "  show-resource-usage         - Display current resource usage"
 	@echo "  update-charts               - Update all Helm charts"
 	@echo "  help                        - Show this help message"
+	@echo ""
+	@echo "Grafana credentials are set using environment variables:"
+	@echo "  GRAFANA_ADMIN_USER  (default: picura)"
+	@echo "  GRAFANA_ADMIN_PASSWORD  (default: picuraadm#4?!8)"

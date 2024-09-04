@@ -6,11 +6,13 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * 0'  # Ejecutar cada domingo a medianoche
-  workflow_dispatch:  # Permite la ejecución manual
+    - cron: '0 0 * * 0'  # Run every Sunday at midnight
+  workflow_dispatch:  # Allows manual execution
 
 env:
   KUBECONFIG: ./kubeconfig.yaml
+  GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
+  GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
 
 jobs:
   manage-kubernetes-resources:
@@ -22,7 +24,7 @@ jobs:
     - name: Set up kubectl
       uses: azure/setup-kubectl@v1
       with:
-        version: 'v1.24.0'  # Especifica la versión de kubectl que necesitas
+        version: 'v1.24.0'  # Specify the kubectl version you need
 
     - name: Configure kubectl
       run: |
@@ -53,7 +55,7 @@ jobs:
     - name: Set up Helm
       uses: azure/setup-helm@v3
       with:
-        version: 'v3.8.0'  # Especifica la versión de Helm que necesitas
+        version: 'v3.8.0'  # Specify the Helm version you need
 
     - name: Install or update Monitoring resources
       run: |
@@ -62,7 +64,9 @@ jobs:
         helm repo update
         kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
         helm upgrade --install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring || echo "Failed to install Prometheus"
-        helm upgrade --install grafana grafana/grafana --namespace monitoring || echo "Failed to install Grafana"
+        helm upgrade --install grafana grafana/grafana --namespace monitoring \
+          --set adminUser="${GRAFANA_ADMIN_USER}" \
+          --set adminPassword="${GRAFANA_ADMIN_PASSWORD}" || echo "Failed to install Grafana"
 
     - name: Install or update Logging resources
       run: |
@@ -88,7 +92,7 @@ jobs:
     - name: Wait for Load Balancers
       run: |
         echo "Waiting for Load Balancers to be assigned public IPs..."
-        sleep 120  # Esperar dos minutos para que se asignen las IPs
+        sleep 120  # Wait for two minutes for IPs to be assigned
 
     - name: Get and display public service URLs
       id: get_urls
