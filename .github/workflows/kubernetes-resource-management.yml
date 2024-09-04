@@ -67,6 +67,11 @@ jobs:
         helm upgrade --install grafana grafana/grafana --namespace monitoring \
           --set adminUser="${GRAFANA_ADMIN_USER}" \
           --set adminPassword="${GRAFANA_ADMIN_PASSWORD}" || echo "Failed to install Grafana"
+        
+        echo "Verifying Prometheus installation:"
+        kubectl get pods -n monitoring -l app=prometheus
+        echo "Verifying Grafana installation:"
+        kubectl get pods -n monitoring -l app.kubernetes.io/name=grafana
 
     - name: Install or update Logging resources
       run: |
@@ -75,12 +80,20 @@ jobs:
         kubectl create namespace logging --dry-run=client -o yaml | kubectl apply -f -
         helm upgrade --install elasticsearch elastic/elasticsearch --namespace logging || echo "Failed to install Elasticsearch"
         helm upgrade --install kibana elastic/kibana --namespace logging || echo "Failed to install Kibana"
+        
+        echo "Verifying Elasticsearch installation:"
+        kubectl get pods -n logging -l app=elasticsearch-master
+        echo "Verifying Kibana installation:"
+        kubectl get pods -n logging -l app=kibana
 
     - name: Install or update Resource Management
       run: |
         helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
         helm repo update
         helm upgrade --install metrics-server metrics-server/metrics-server --namespace kube-system || echo "Failed to install Metrics Server"
+        
+        echo "Verifying Metrics Server installation:"
+        kubectl get pods -n kube-system -l k8s-app=metrics-server
 
     - name: Expose services
       run: |
@@ -89,29 +102,75 @@ jobs:
         kubectl patch svc elasticsearch-master -n logging -p '{"spec": {"type": "LoadBalancer"}}' || echo "Failed to expose Elasticsearch"
         kubectl patch svc kibana-kibana -n logging -p '{"spec": {"type": "LoadBalancer"}}' || echo "Failed to expose Kibana"
 
+    - name: Debug - Check service status
+      run: |
+        echo "Prometheus service status:"
+        kubectl get svc prometheus-kube-prometheus-prometheus -n monitoring -o wide
+        echo "Grafana service status:"
+        kubectl get svc grafana -n monitoring -o wide
+        echo "Elasticsearch service status:"
+        kubectl get svc elasticsearch-master -n logging -o wide
+        echo "Kibana service status:"
+        kubectl get svc kibana-kibana -n logging -o wide
+
     - name: Wait for Load Balancers
       run: |
         echo "Waiting for Load Balancers to be assigned public IPs..."
-        sleep 120  # Wait for two minutes for IPs to be assigned
+        sleep 180  # Wait for 3 minutes
 
     - name: Get and display public service URLs
       id: get_urls
       run: |
-        PROMETHEUS_IP=$(kubectl get svc prometheus-kube-prometheus-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Prometheus IP")
-        GRAFANA_IP=$(kubectl get svc grafana -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Grafana IP")
-        ELASTICSEARCH_IP=$(kubectl get svc elasticsearch-master -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Elasticsearch IP")
-        KIBANA_IP=$(kubectl get svc kibana-kibana -n logging -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Failed to get Kibana IP")
+        echo "Checking service statuses:"
+        
+        check_service() {
+          local namespace=$1
+          local service=$2
+          echo "Checking $service in namespace $namespace"
+          kubectl get svc $service -n $namespace -o wide || echo "Service $service not found in namespace $namespace"
+          kubectl describe svc $service -n $namespace || echo "Unable to describe service $service in namespace $namespace"
+        }
+        
+        check_service monitoring prometheus-kube-prometheus-prometheus
+        check_service monitoring grafana
+        check_service logging elasticsearch-master
+        check_service logging kibana-kibana
+        
+        echo "Attempting to get service IPs:"
+        
+        get_service_ip() {
+          local namespace=$1
+          local service=$2
+          local ip=$(kubectl get svc $service -n $namespace -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+          if [ -z "$ip" ]; then
+            echo "pending"
+          else
+            echo "$ip"
+          fi
+        }
+        
+        PROMETHEUS_IP=$(get_service_ip monitoring prometheus-kube-prometheus-prometheus)
+        GRAFANA_IP=$(get_service_ip monitoring grafana)
+        ELASTICSEARCH_IP=$(get_service_ip logging elasticsearch-master)
+        KIBANA_IP=$(get_service_ip logging kibana-kibana)
 
-        echo "Public URLs:"
-        echo "Prometheus: http://$PROMETHEUS_IP:9090"
-        echo "Grafana: http://$GRAFANA_IP:80"
-        echo "Elasticsearch: http://$ELASTICSEARCH_IP:9200"
-        echo "Kibana: http://$KIBANA_IP:5601"
+        echo "Public URLs (IPs may be pending):"
+        echo "Prometheus: http://${PROMETHEUS_IP}:9090"
+        echo "Grafana: http://${GRAFANA_IP}:80"
+        echo "Elasticsearch: http://${ELASTICSEARCH_IP}:9200"
+        echo "Kibana: http://${KIBANA_IP}:5601"
 
-        echo "prometheus_url=http://$PROMETHEUS_IP:9090" >> $GITHUB_OUTPUT
-        echo "grafana_url=http://$GRAFANA_IP:80" >> $GITHUB_OUTPUT
-        echo "elasticsearch_url=http://$ELASTICSEARCH_IP:9200" >> $GITHUB_OUTPUT
-        echo "kibana_url=http://$KIBANA_IP:5601" >> $GITHUB_OUTPUT
+        echo "prometheus_url=http://${PROMETHEUS_IP}:9090" >> $GITHUB_OUTPUT
+        echo "grafana_url=http://${GRAFANA_IP}:80" >> $GITHUB_OUTPUT
+        echo "elasticsearch_url=http://${ELASTICSEARCH_IP}:9200" >> $GITHUB_OUTPUT
+        echo "kibana_url=http://${KIBANA_IP}:5601" >> $GITHUB_OUTPUT
+
+    - name: Debug - Check namespace events
+      run: |
+        echo "Events in monitoring namespace:"
+        kubectl get events -n monitoring
+        echo "Events in logging namespace:"
+        kubectl get events -n logging
 
     - name: Create Release Notes
       if: success()
@@ -128,6 +187,8 @@ jobs:
         - Kibana: ${{ steps.get_urls.outputs.kibana_url }}
 
         Please note that you may need to use appropriate authentication to access these services.
+        If any URLs show as "http://pending", it means the LoadBalancer IP was not yet available. 
+        Check the cluster status for the most up-to-date information.
         EOF
         cat release_notes.md
 
