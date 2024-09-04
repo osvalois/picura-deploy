@@ -21,9 +21,9 @@ METRICS_SERVER_CHART = metrics-server/metrics-server
 
 # Grafana credentials
 GRAFANA_ADMIN_USER ?= $(shell echo $${GRAFANA_ADMIN_USER:-picura})
-GRAFANA_ADMIN_PASSWORD ?= $(shell echo $${GRAFANA_ADMIN_PASSWORD:-picura})
+GRAFANA_ADMIN_PASSWORD ?= $(shell echo $${GRAFANA_ADMIN_PASSWORD:-picuraadm#4?!8})
 
-.PHONY: all install-monitoring install-logging install-resource-management apply-resource-quotas apply-limit-ranges install-hpa install-vpa expose-services get-service-urls clean show-resource-usage update-charts help
+.PHONY: all install-monitoring install-logging install-resource-management apply-resource-quotas apply-limit-ranges install-hpa install-vpa expose-services get-service-urls clean show-resource-usage update-charts help reset-grafana-password
 
 all: install-monitoring install-logging install-resource-management apply-resource-quotas apply-limit-ranges install-hpa install-vpa
 
@@ -37,6 +37,16 @@ install-monitoring:
 	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS) \
 		--set adminUser="$(GRAFANA_ADMIN_USER)" \
 		--set adminPassword="$(GRAFANA_ADMIN_PASSWORD)"
+	$(MAKE) reset-grafana-password
+
+# Reset Grafana Password
+reset-grafana-password:
+	@echo "Resetting Grafana admin password..."
+	@GRAFANA_POD=$$($(KUBECTL) get pods -n $(MONITORING_NS) -l app.kubernetes.io/name=grafana -o jsonpath="{.items[0].metadata.name}") && \
+	$(KUBECTL) exec -it -n $(MONITORING_NS) $$GRAFANA_POD -- \
+		grafana-cli --homepath "/usr/share/grafana" admin reset-admin-password "$(GRAFANA_ADMIN_PASSWORD)" && \
+	echo "Grafana admin password reset successfully" || \
+	(echo "Failed to reset Grafana admin password" && $(KUBECTL) logs -n $(MONITORING_NS) $$GRAFANA_POD)
 
 # Logging
 install-logging:
@@ -108,6 +118,7 @@ update-charts:
 	$(HELM) upgrade --install grafana $(GRAFANA_CHART) -n $(MONITORING_NS) \
 		--set adminUser="$(GRAFANA_ADMIN_USER)" \
 		--set adminPassword="$(GRAFANA_ADMIN_PASSWORD)"
+	$(MAKE) reset-grafana-password
 	$(HELM) upgrade --install elasticsearch $(ELK_CHART) -n $(LOGGING_NS)
 	$(HELM) upgrade --install kibana elastic/kibana -n $(LOGGING_NS)
 	$(HELM) upgrade --install metrics-server $(METRICS_SERVER_CHART) --namespace kube-system
@@ -129,8 +140,9 @@ help:
 	@echo "  clean                       - Remove all installed components"
 	@echo "  show-resource-usage         - Display current resource usage"
 	@echo "  update-charts               - Update all Helm charts"
+	@echo "  reset-grafana-password      - Reset Grafana admin password"
 	@echo "  help                        - Show this help message"
 	@echo ""
 	@echo "Grafana credentials are set using environment variables:"
 	@echo "  GRAFANA_ADMIN_USER  (default: picura)"
-	@echo "  GRAFANA_ADMIN_PASSWORD  (default: picura)"
+	@echo "  GRAFANA_ADMIN_PASSWORD  (default: picuraadm#4?!8)"
