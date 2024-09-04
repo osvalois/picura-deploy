@@ -1,8 +1,8 @@
-# Picura: Plataforma Empresarial de Kubernetes con IA/ML
+# Picura Deploy 
 
 ## Visión General
 
-Picura es una plataforma empresarial de vanguardia basada en Kubernetes, diseñada para revolucionar el desarrollo y despliegue de aplicaciones en la nube, con un enfoque especial en Inteligencia Artificial y Machine Learning (IA/ML). Esta plataforma proporciona un ecosistema de desarrollo inteligente, adaptativo y altamente eficiente que no solo agiliza los procesos de desarrollo y operaciones, sino que también ofrece herramientas avanzadas para la optimización continua y la toma de decisiones basada en datos.
+Picura deploy es una plataforma empresarial de vanguardia basada para desplegar tu aplicación, diseñada para facilitar el desarrollo y despliegue de aplicaciones en la nube, con un enfoque especial en Inteligencia Artificial. Esta plataforma proporciona un ecosistema de desarrollo inteligente, adaptativo y altamente eficiente que no solo agiliza los procesos de desarrollo y operaciones, sino que también ofrece herramientas avanzadas para la optimización continua y la toma de decisiones basada en datos.
 
 ## Características Clave
 
@@ -12,7 +12,7 @@ Picura es una plataforma empresarial de vanguardia basada en Kubernetes, diseña
 - **Observabilidad Total**: Monitoreo en tiempo real con análisis predictivo impulsado por IA.
 - **IA/ML como Ciudadano de Primera Clase**: Infraestructura optimizada para cargas de trabajo de IA/ML y herramientas de AutoML integradas.
 - **Escalabilidad Inteligente**: Ajuste automático de recursos basado en patrones de uso y predicciones de carga.
-- **Experiencia de Desarrollador Superior**: Abstracción de la complejidad de Kubernetes con una interfaz intuitiva y potente.
+- **Experiencia de Desarrollador Superior**: Abstracción de la complejidad de despliegue con una interfaz intuitiva y potente.
 
 ## Arquitectura
 
