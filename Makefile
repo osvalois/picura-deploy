@@ -21,7 +21,7 @@ METRICS_SERVER_CHART = metrics-server/metrics-server
 
 # Grafana credentials
 GRAFANA_ADMIN_USER ?= $(shell echo $${GRAFANA_ADMIN_USER:-picura})
-GRAFANA_ADMIN_PASSWORD ?= $(shell echo $${GRAFANA_ADMIN_PASSWORD:-picuraadm#4?!8})
+GRAFANA_ADMIN_PASSWORD ?= $(shell echo $${GRAFANA_ADMIN_PASSWORD:-picura})
 
 .PHONY: all install-monitoring install-logging install-resource-management apply-resource-quotas apply-limit-ranges install-hpa install-vpa expose-services get-service-urls clean show-resource-usage update-charts help
 
@@ -133,4 +133,4 @@ help:
 	@echo ""
 	@echo "Grafana credentials are set using environment variables:"
 	@echo "  GRAFANA_ADMIN_USER  (default: picura)"
-	@echo "  GRAFANA_ADMIN_PASSWORD  (default: picuraadm#4?!8)"
+	@echo "  GRAFANA_ADMIN_PASSWORD  (default: picura)"
