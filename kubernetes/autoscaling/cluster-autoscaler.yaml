@@ -1,0 +1,83 @@
+# kubernetes/autoscaling/cluster-autoscaler.yaml
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: cluster-autoscaler-vpa
+  namespace: kube-system
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: cluster-autoscaler
+  updatePolicy:
+    updateMode: "Auto"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-autoscaler
+  namespace: kube-system
+  labels:
+    app: cluster-autoscaler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cluster-autoscaler
+  template:
+    metadata:
+      labels:
+        app: cluster-autoscaler
+    spec:
+      serviceAccountName: cluster-autoscaler
+      containers:
+      - image: k8s.gcr.io/autoscaling/cluster-autoscaler:v1.21.0
+        name: cluster-autoscaler
+        resources:
+          limits:
+            cpu: 100m
+            memory: 300Mi
+          requests:
+            cpu: 100m
+            memory: 300Mi
+        command:
+        - ./cluster-autoscaler
+        - --v=4
+        - --stderrthreshold=info
+        - --cloud-provider=azure
+        - --skip-nodes-with-local-storage=false
+        - --expander=least-waste
+        - --node-group-auto-discovery=label:k8s-az-cluster-name=picura-aks
+        - --balance-similar-node-groups
+        - --skip-nodes-with-system-pods=false
+        env:
+        - name: ARM_SUBSCRIPTION_ID
+          valueFrom:
+            secretKeyRef:
+              name: cluster-autoscaler-azure
+              key: arm-subscription-id
+        - name: ARM_RESOURCE_GROUP
+          valueFrom:
+            secretKeyRef:
+              name: cluster-autoscaler-azure
+              key: arm-resource-group
+        - name: ARM_TENANT_ID
+          valueFrom:
+            secretKeyRef:
+              name: cluster-autoscaler-azure
+              key: arm-tenant-id
+        - name: ARM_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: cluster-autoscaler-azure
+              key: arm-client-id
+        - name: ARM_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: cluster-autoscaler-azure
+              key: arm-client-secret
+        - name: ARM_VM_TYPE
+          valueFrom:
+            secretKeyRef:
+              name: cluster-autoscaler-azure
+              key: arm-vm-type

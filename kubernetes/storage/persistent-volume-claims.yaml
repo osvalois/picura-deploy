@@ -1,0 +1,12 @@
+# kubernetes/storage/persistent-volume-claims.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azure-managed-disk
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: azure-disk-premium
+  resources:
+    requests:
+      storage: 5Gi

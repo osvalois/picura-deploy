@@ -1,0 +1,42 @@
+# kubernetes/logging/elastic-fluentd-kibana.yaml
+apiVersion: helm.fluxcd.io/v1
+kind: HelmRelease
+metadata:
+  name: efk-stack
+  namespace: logging
+spec:
+  releaseName: efk-stack
+  chart:
+    repository: https://helm.elastic.co
+    name: elastic-stack
+    version: 7.13.0
+  values:
+    elasticsearch:
+      replicas: 3
+      resources:
+        requests:
+          cpu: "1000m"
+          memory: "2Gi"
+        limits:
+          cpu: "2000m"
+          memory: "4Gi"
+      volumeClaimTemplate:
+        storageClassName: azure-disk-premium
+        resources:
+          requests:
+            storage: 100Gi
+    kibana:
+      ingress:
+        enabled: true
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+        hosts:
+          - kibana.picura.com
+        tls:
+          - secretName: kibana-tls
+            hosts:
+              - kibana.picura.com
+    fluentd:
+      configMaps:
+        useDefaultConfig: true

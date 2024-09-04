@@ -1,0 +1,32 @@
+# kubernetes/service-mesh/istio/istio-operator.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+  name: istio-control-plane
+spec:
+  profile: default
+  components:
+    egressGateways:
+    - name: istio-egressgateway
+      enabled: true
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: true
+    pilot:
+      enabled: true
+  values:
+    global:
+      proxy:
+        autoInject: enabled
+      useMCP: false
+    gateways:
+      istio-ingressgateway:
+        type: LoadBalancer
+        serviceAnnotations:
+          service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    meshConfig:
+      enableTracing: true
+      defaultConfig:
+        tracing:
+          sampling: 100

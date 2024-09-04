@@ -1,0 +1,21 @@
+# kubernetes/monitoring/prometheus/prometheus-rules.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubernetes-apps
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: prometheus-operator
+spec:
+  groups:
+  - name: kubernetes-apps
+    rules:
+    - alert: KubePodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{job="kube-state-metrics"}[15m]) * 60 * 5 > 0
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: Kubernetes Pod crash looping (instance {{ $labels.instance }})
+        description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}) is restarting {{ printf \"%.2f\" $value }} times / 5 minutes."

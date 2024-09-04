@@ -1,0 +1,23 @@
+# kubernetes/monitoring/loki/loki-stack.yaml
+apiVersion: helm.fluxcd.io/v1
+kind: HelmRelease
+metadata:
+  name: loki-stack
+  namespace: monitoring
+spec:
+  releaseName: loki-stack
+  chart:
+    repository: https://grafana.github.io/helm-charts
+    name: loki-stack
+    version: 2.5.0
+  values:
+    loki:
+      persistence:
+        enabled: true
+        storageClassName: azure-disk-premium
+        size: 10Gi
+    promtail:
+      serviceMonitor:
+        enabled: true
+    grafana:
+      enabled: false

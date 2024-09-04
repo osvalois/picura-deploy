@@ -1,0 +1,155 @@
+# kubernetes/applications/kubeflow/kubeflow-operator.yaml
+apiVersion: kfdef.apps.kubeflow.org/v1
+kind: KfDef
+metadata:
+  name: kubeflow
+  namespace: kubeflow
+spec:
+  applications:
+  # Istio
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: istio/istio
+    name: istio
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: istio/cluster-local-gateway
+    name: cluster-local-gateway
+  
+  # Kubeflow components
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: cert-manager/cert-manager/base
+    name: cert-manager
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: kubeflow-roles
+    name: kubeflow-roles
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pytorch-job/pytorch-job-crds/overlays/application
+    name: pytorch-job-crds
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pytorch-job/pytorch-operator/overlays/application
+    name: pytorch-operator
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: tf-training/tf-job-crds/overlays/application
+    name: tf-job-crds
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: tf-training/tf-job-operator/overlays/application
+    name: tf-job-operator
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: katib/katib-crds/overlays/application
+    name: katib-crds
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: katib/katib-controller/overlays/application
+    name: katib-controller
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pipeline/api-service/overlays/application
+    name: api-service
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pipeline/persistence-agent/overlays/application
+    name: persistence-agent
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pipeline/pipelines-ui/overlays/application
+    name: pipelines-ui
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pipeline/pipelines-viewer/overlays/application
+    name: pipelines-viewer
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pipeline/scheduledworkflow/overlays/application
+    name: scheduledworkflow
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: pipeline/pipeline-visualization-service/overlays/application
+    name: pipeline-visualization-service
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: notebook-controller/overlays/application
+    name: notebook-controller
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: jupyter/jupyter-web-app/overlays/application
+    name: jupyter-web-app
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: profiles/overlays/application
+    name: profiles
+  - kustomizeConfig:
+      repoRef:
+        name: manifests
+        path: seldon/seldon-core-operator/overlays/application
+    name: seldon-core-operator
+
+  # Azure-specific configurations
+  - kustomizeConfig:
+      parameters:
+      - name: AZ_SUBSCRIPTION_ID
+        value: ${AZ_SUBSCRIPTION_ID}
+      - name: AZ_TENANT_ID
+        value: ${AZ_TENANT_ID}
+      - name: AZ_CLIENT_ID
+        value: ${AZ_CLIENT_ID}
+      - name: AZ_CLIENT_SECRET
+        value: ${AZ_CLIENT_SECRET}
+      repoRef:
+        name: manifests
+        path: azure
+    name: azure-configs
+
+  repos:
+  - name: manifests
+    uri: https://github.com/kubeflow/manifests/archive/v1.5.0.tar.gz
+
+  version: v1.5.0
+
+  # Kubeflow deployment platform: Azure
+  platform: azure
+
+  # Azure-specific settings
+  plugins:
+  - kind: KfAzurePlugin
+    metadata:
+      name: azure
+    spec:
+      auth:
+        basicAuth:
+          password: ${KUBEFLOW_PASSWORD}
+      storage:
+        storageClassName: azure-disk-premium
+      networking:
+        virtualNetworkName: picura-vnet
+        subnetName: aks-subnet
+
+  # Enable multi-user mode
+  useBasicAuth: false
+  enableApplications: true

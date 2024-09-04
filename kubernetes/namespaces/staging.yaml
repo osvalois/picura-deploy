@@ -1,0 +1,8 @@
+# kubernetes/namespaces/staging.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    name: staging
+    environment: staging
