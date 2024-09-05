@@ -1,7 +1,12 @@
 # .github/workflows/infrastructure.yaml
+
 name: Deploy Infrastructure
 
 on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types:
+      - completed
   push:
     branches:
       - main
@@ -18,6 +23,7 @@ env:
   ARM_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   ARM_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+  TF_VERSION: '1.0.0'
 
 jobs:
   terraform:
@@ -30,11 +36,11 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v1
       with:
-        terraform_version: 1.0.0
+        terraform_version: ${{ env.TF_VERSION }}
 
     - name: Terraform Format
       id: fmt
-      run: terraform fmt -check
+      run: terraform fmt -check -recursive
       working-directory: ./terraform
 
     - name: Terraform Init
@@ -50,7 +56,7 @@ jobs:
     - name: Terraform Plan
       id: plan
       if: github.event_name == 'pull_request'
-      run: terraform plan -no-color
+      run: terraform plan -no-color -input=false
       continue-on-error: true
       working-directory: ./terraform
 
@@ -84,7 +90,32 @@ jobs:
             body: output
           })
 
-    - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: terraform apply -auto-approve
+    - name: Terraform Plan (Push)
+      if: github.event_name == 'push' || github.event_name == 'workflow_run'
+      run: terraform plan -no-color -input=false -out=tfplan
       working-directory: ./terraform
+
+    - name: Terraform Apply
+      if: (github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_run'))
+      run: terraform apply -auto-approve tfplan
+      working-directory: ./terraform
+
+    - name: Notify Slack on Success
+      if: success()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: Infrastructure deployment completed successfully!
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+    - name: Notify Slack on Failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: Infrastructure deployment failed. Please check the logs.
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

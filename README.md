@@ -1,8 +1,8 @@
-# Picura Deploy 
+# Picura Deploy
 
 ## Visión General
 
-Picura Deploy es una plataforma avanzada para desplegar aplicaciones en la nube, con un enfoque en la Inteligencia Artificial. Facilita el desarrollo y las operaciones al ofrecer un entorno adaptativo y eficiente. Además, incluye herramientas que optimizan los procesos y ayudan en la toma de decisiones basadas en datos.
+Picura Deploy es una plataforma avanzada para desplegar aplicaciones en la nube. Facilita el desarrollo y las operaciones al ofrecer un entorno adaptativo y eficiente. Además, incluye herramientas que optimizan los procesos y ayudan en la toma de decisiones basadas en datos.
 
 ## Características Clave
 
@@ -38,8 +38,7 @@ La plataforma Picura se compone de los siguientes componentes principales:
 5. **Observabilidad**:
    - Prometheus para monitoreo
    - Grafana para visualización
-   - Loki para logging
-   - Jaeger para tracing distribuido
+   - EFK Stack (Elasticsearch, Fluentd, Kibana) para logging centralizado
 
 6. **Seguridad**:
    - Azure Key Vault para gestión de secretos
@@ -57,11 +56,11 @@ La plataforma Picura se compone de los siguientes componentes principales:
 ## Requisitos Previos
 
 - Suscripción de Azure
-- Azure CLI
-- Terraform
-- kubectl
-- Helm
-- Git
+- Azure CLI (versión 2.30.0 o superior)
+- Terraform (versión 1.0.0 o superior)
+- kubectl (versión 1.21.0 o superior)
+- Helm (versión 3.6.0 o superior)
+- Git (versión 2.30.0 o superior)
 
 ## Instalación
 
@@ -164,6 +163,7 @@ La plataforma Picura implementa múltiples capas de seguridad:
 3. **Políticas de Red**: Implementadas con Calico y Network Policies de Kubernetes.
 4. **Escaneo de Vulnerabilidades**: Integrado en el pipeline de CI/CD.
 5. **Gestión de Secretos**: Centralizada con Azure Key Vault.
+6. **Rotación Automática de Secretos**: Implementada para credenciales críticas.
 
 ## Mejores Prácticas
 
@@ -172,6 +172,8 @@ La plataforma Picura implementa múltiples capas de seguridad:
 3. Implemente límites de recursos para todos los pods.
 4. Utilice la integración continua para pruebas automáticas.
 5. Monitoree y alerte sobre métricas clave de rendimiento y seguridad.
+6. Mantenga todos los componentes actualizados a las últimas versiones estables.
+7. Realice auditorías de seguridad regulares.
 
 ## Contribución
 

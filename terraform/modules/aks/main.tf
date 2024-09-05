@@ -1,3 +1,5 @@
+# terraform/modules/aks/main.tf
+
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = var.cluster_name
   location            = var.location

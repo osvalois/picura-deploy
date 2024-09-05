@@ -1,3 +1,5 @@
+# .github/workflows/ci-cd.yaml
+
 name: CI/CD Pipeline
 
 on:
@@ -14,7 +16,7 @@ env:
   AKS_RESOURCE_GROUP: picura-rg
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -36,6 +38,21 @@ jobs:
         docker build . -t ${{ env.ACR_NAME }}.azurecr.io/picura:${{ github.sha }}
         docker push ${{ env.ACR_NAME }}.azurecr.io/picura:${{ github.sha }}
 
+    - name: Run tests
+      run: |
+        # Aquí irían los comandos para ejecutar las pruebas de la aplicación
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
     - name: Set AKS context
       uses: azure/aks-set-context@v1
       with:
@@ -52,3 +69,11 @@ jobs:
         images: |
           ${{ env.ACR_NAME }}.azurecr.io/picura:${{ github.sha }}
         namespace: production
+
+    - name: Notify deployment
+      if: success()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: Deployment to production completed successfully!
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}

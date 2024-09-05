@@ -1,36 +1,59 @@
 # kubernetes/monitoring/prometheus/prometheus-operator.yaml
-apiVersion: helm.fluxcd.io/v1
-kind: HelmRelease
+
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
 metadata:
-  name: prometheus-operator
+  name: prometheus
   namespace: monitoring
 spec:
-  releaseName: prometheus-operator
-  chart:
-    repository: https://prometheus-community.github.io/helm-charts
-    name: kube-prometheus-stack
-    version: 18.0.0
-  values:
-    prometheus:
-      prometheusSpec:
-        storageSpec:
-          volumeClaimTemplate:
-            spec:
-              storageClassName: azure-disk-premium
-              accessModes: ["ReadWriteOnce"]
-              resources:
-                requests:
-                  storage: 50Gi
-    grafana:
-      adminPassword: ${GRAFANA_ADMIN_PASSWORD}
-      ingress:
-        enabled: true
-        annotations:
-          kubernetes.io/ingress.class: nginx
-          cert-manager.io/cluster-issuer: letsencrypt-prod
-        hosts:
-          - grafana.picura.com
-        tls:
-          - secretName: grafana-tls
-            hosts:
-              - grafana.picura.com
+  serviceAccountName: prometheus
+  serviceMonitorSelector:
+    matchLabels:
+      team: frontend
+  ruleSelector:
+    matchLabels:
+      team: frontend
+  resources:
+    requests:
+      memory: 400Mi
+  enableAdminAPI: false
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: managed-premium
+        resources:
+          requests:
+            storage: 100Gi
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: example-app
+  namespace: monitoring
+  labels:
+    team: frontend
+spec:
+  selector:
+    matchLabels:
+      app: example-app
+  endpoints:
+  - port: web
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prometheus-example-rules
+  namespace: monitoring
+  labels:
+    team: frontend
+spec:
+  groups:
+  - name: example
+    rules:
+    - alert: HighRequestLatency
+      expr: job:request_latency_seconds:mean5m{job="myjob"} > 0.5
+      for: 10m
+      labels:
+        severity: page
+      annotations:
+        summary: High request latency

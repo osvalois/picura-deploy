@@ -1,4 +1,5 @@
 # kubernetes/networking/ingress-nginx.yaml
+
 apiVersion: helm.fluxcd.io/v1
 kind: HelmRelease
 metadata:
@@ -22,3 +23,10 @@ spec:
           enabled: true
       extraArgs:
         default-ssl-certificate: "cert-manager/wildcard-tls"
+    admissionWebhooks:
+      enabled: true
+      failurePolicy: Fail
+      patch:
+        enabled: true
+    podSecurityPolicy:
+      enabled: true
