@@ -11,6 +11,18 @@ variable "location" {
   default     = "East US"
 }
 
+variable "cert_manager_email" {
+  description = "Email address for Let's Encrypt notifications"
+  type        = string
+  default     = "a@picura.online"
+}
+
+variable "acr_name" {
+  description = "Name of the Azure Container Registry"
+  type        = string
+  default     = "picuraacr"
+}
+
 variable "address_space" {
   description = "Address space for the virtual network"
   type        = list(string)

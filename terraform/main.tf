@@ -29,6 +29,14 @@ module "networking" {
   tags                = var.tags
 }
 
+module "monitoring" {
+  source                       = "./modules/monitoring"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  log_analytics_workspace_name = var.log_analytics_workspace_name
+  tags                         = var.tags
+}
+
 module "aks" {
   source                       = "./modules/aks"
   resource_group_name          = azurerm_resource_group.rg.name
@@ -59,15 +67,6 @@ module "key_vault" {
   key_vault_name      = var.key_vault_name
   aks_principal_id    = module.aks.principal_id
   tags                = var.tags
-}
-
-module "monitoring" {
-  source                        = "./modules/monitoring"
-  resource_group_name           = azurerm_resource_group.rg.name
-  location                      = azurerm_resource_group.rg.location
-  log_analytics_workspace_name  = var.log_analytics_workspace_name
-  aks_cluster_id                = module.aks.cluster_id
-  tags                          = var.tags
 }
 
 module "istio" {
