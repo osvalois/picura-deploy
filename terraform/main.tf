@@ -85,5 +85,6 @@ module "cert_manager" {
 module "kubeflow" {
   source       = "./modules/kubeflow"
   cluster_name = module.aks.cluster_name
+  domain       = var.domain
   depends_on   = [module.aks, module.istio]
 }

@@ -23,6 +23,11 @@ variable "acr_name" {
   default     = "picuraacr"
 }
 
+variable "domain" {
+  description = "The domain name for Kubeflow"
+  type        = string
+}
+
 variable "address_space" {
   description = "Address space for the virtual network"
   type        = list(string)

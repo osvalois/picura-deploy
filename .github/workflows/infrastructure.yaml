@@ -59,21 +59,33 @@ jobs:
       id: validate
       run: terraform validate -no-color
       working-directory: ./terraform
+      continue-on-error: true
 
     - name: Terraform Plan
       id: plan
-      run: terraform plan -no-color -input=false
+      run: terraform plan -no-color -input=false -out=tfplan
       continue-on-error: true
       working-directory: ./terraform
+
+    - name: Terraform Show
+      id: show
+      run: terraform show -no-color tfplan > tfplan.txt
+      working-directory: ./terraform
+
+    - name: Terraform Plan Status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
 
     - name: Update Pull Request
       uses: actions/github-script@v6
       if: github.event_name == 'pull_request'
       env:
-        PLAN: "${{ steps.plan.outputs.stdout }}"
+        PLAN: "${{ steps.show.outputs.stdout }}"
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
+          const fs = require('fs');
+          const planOutput = fs.readFileSync('./terraform/tfplan.txt', 'utf8');
           const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
           #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
           #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
@@ -82,7 +94,7 @@ jobs:
           <details><summary>Show Plan</summary>
           
           \`\`\`\n
-          ${process.env.PLAN}
+          ${planOutput}
           \`\`\`
           
           </details>
@@ -97,6 +109,39 @@ jobs:
           })
 
     - name: Terraform Apply
-      if: (github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_run'))
-      run: terraform apply -auto-approve
+      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_run')
+      run: terraform apply -auto-approve tfplan
       working-directory: ./terraform
+
+    - name: Cleanup Terraform artifacts
+      if: always()
+      run: |
+        rm -f tfplan tfplan.txt
+      working-directory: ./terraform
+
+    - name: Notify Slack on Success
+      if: success()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          Infrastructure deployment completed successfully! 🎉
+          Commit: ${{ github.sha }}
+          Workflow: ${{ github.workflow }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Notify Slack on Failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          Infrastructure deployment failed. 😞
+          Please check the logs for details.
+          Commit: ${{ github.sha }}
+          Workflow: ${{ github.workflow }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
