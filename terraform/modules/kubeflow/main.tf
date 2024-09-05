@@ -48,38 +48,26 @@ resource "helm_release" "kubeflow" {
   }
 }
 
-resource "kubernetes_manifest" "kubeflow_virtual_service" {
-  depends_on = [kubernetes_manifest.kubeflow_gateway]
-
+resource "kubernetes_manifest" "kubeflow_gateway" {
   manifest = {
     apiVersion = "networking.istio.io/v1alpha3"
-    kind       = "VirtualService"
+    kind       = "Gateway"
     metadata = {
-      name      = "kubeflow-routes"
+      name      = "kubeflow-gateway"
       namespace = kubernetes_namespace.kubeflow.metadata[0].name
     }
     spec = {
-      hosts    = ["kubeflow.${var.domain}"]
-      gateways = ["kubeflow-gateway"]
-      http = [
+      selector = {
+        istio = "ingressgateway"
+      }
+      servers = [
         {
-          match = [
-            {
-              uri = {
-                prefix = "/"
-              }
-            }
-          ]
-          route = [
-            {
-              destination = {
-                host = "kubeflow-gateway.kubeflow.svc.cluster.local"
-                port = {
-                  number = 80
-                }
-              }
-            }
-          ]
+          port = {
+            number   = 80
+            name     = "http"
+            protocol = "HTTP"
+          }
+          hosts = ["kubeflow.${var.domain}"]
         }
       ]
     }
@@ -97,7 +85,7 @@ resource "kubernetes_manifest" "kubeflow_virtual_service" {
       namespace = kubernetes_namespace.kubeflow.metadata[0].name
     }
     spec = {
-      hosts = ["kubeflow.${var.domain}"]
+      hosts    = ["kubeflow.${var.domain}"]
       gateways = ["kubeflow-gateway"]
       http = [
         {
