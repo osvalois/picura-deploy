@@ -19,10 +19,6 @@ on:
       - 'terraform/**'
 
 env:
-  ARM_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
   TF_VERSION: '1.0.0'
 
 jobs:
@@ -33,6 +29,18 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Extract Azure Credentials
+      run: |
+        echo "ARM_CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientId)" >> $GITHUB_ENV
+        echo "ARM_CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientSecret)" >> $GITHUB_ENV
+        echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId)" >> $GITHUB_ENV
+        echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .tenantId)" >> $GITHUB_ENV
+
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v1
       with:
@@ -40,7 +48,12 @@ jobs:
 
     - name: Terraform Format
       id: fmt
-      run: terraform fmt -check -recursive
+      run: |
+        terraform fmt -check -recursive -diff
+        if [ $? -ne 0 ]; then
+          echo "Terraform files are not properly formatted. Please run 'terraform fmt -recursive' and commit the changes."
+          exit 1
+        fi
       working-directory: ./terraform
 
     - name: Terraform Init
@@ -100,22 +113,14 @@ jobs:
       run: terraform apply -auto-approve tfplan
       working-directory: ./terraform
 
-    - name: Notify Slack on Success
-      if: success()
+    - name: Notify Slack
+      if: always()
       uses: 8398a7/action-slack@v3
       with:
         status: ${{ job.status }}
-        text: Infrastructure deployment completed successfully!
+        text: |
+          Infrastructure deployment ${{ job.status }}
+          ${{ job.status == 'success' && 'Deployment completed successfully!' || 'Please check the logs for details.' }}
         fields: repo,message,commit,author,action,eventName,ref,workflow
       env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-
-    - name: Notify Slack on Failure
-      if: failure()
-      uses: 8398a7/action-slack@v3
-      with:
-        status: ${{ job.status }}
-        text: Infrastructure deployment failed. Please check the logs.
-        fields: repo,message,commit,author,action,eventName,ref,workflow
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
