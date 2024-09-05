@@ -2,7 +2,7 @@
 
 ## Visión General
 
-Picura deploy es una plataforma empresarial de vanguardia basada para desplegar tu aplicación, diseñada para facilitar el desarrollo y despliegue de aplicaciones en la nube, con un enfoque especial en Inteligencia Artificial. Esta plataforma proporciona un ecosistema de desarrollo inteligente, adaptativo y altamente eficiente que no solo agiliza los procesos de desarrollo y operaciones, sino que también ofrece herramientas avanzadas para la optimización continua y la toma de decisiones basada en datos.
+Picura Deploy es una plataforma avanzada para desplegar aplicaciones en la nube, con un enfoque en la Inteligencia Artificial. Facilita el desarrollo y las operaciones al ofrecer un entorno adaptativo y eficiente. Además, incluye herramientas que optimizan los procesos y ayudan en la toma de decisiones basadas en datos.
 
 ## Características Clave
 
